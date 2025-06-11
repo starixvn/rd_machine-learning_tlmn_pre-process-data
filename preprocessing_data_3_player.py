@@ -16,139 +16,179 @@ import math
 from collections import defaultdict
 
 
-def remove_folder_with_empty_state_file(data_src_dir):
-    all_folder_data = glob.glob(os.path.join(data_src_dir, '**'))
-    for folder in all_folder_data:
-        if os.path.isdir(folder):
-            files_in_folder = os.listdir(folder)
-            if len(files_in_folder) == 1 and 'initial_game_info.pkl' in files_in_folder:
-                print(f"Removing folder and its contents: {folder}")
-                for file in files_in_folder:
-                    os.remove(os.path.join(folder, file))
-                os.rmdir(folder)
-        else:
-            raise ValueError(f"Expected a directory but found a file: {folder}")
-
-def remove_empty_file(data_src_dir):
-    pkl_files = glob.glob(os.path.join(data_src_dir, '**/state_*.pkl'), recursive=True)
-    for file in pkl_files:
-        if os.path.getsize(file) == 0:
-            print(f"Found empty file: {file}")
-            os.remove(file)
-
-def cleaning_data(data_src_dir):
-    print("\nCleaning data stage 1: Remove folder with empty state file")
-    remove_folder_with_empty_state_file(data_src_dir)
-    print("\nCleaning data stage 2: Remove empty file")
-    remove_empty_file(data_src_dir)
-
-def checking_duplicate_initial_game_info(data_src_dir):
-    print(f"\nChecking duplicate initial game info:")
-    all_initial_game_infos = glob.glob(os.path.join(data_src_dir, '**/initial_game_info.pkl'), recursive=True)
-    assert len(all_initial_game_infos) == len(os.listdir(data_src_dir))
-    set_player1_card = set()
-    for initial_game_info_dir in all_initial_game_infos:
-        with open(initial_game_info_dir, 'rb') as f:
-            initial_game_info = pickle.load(f)
-        set_player1_card.add(initial_game_info["player1_card"])
-    assert len(set_player1_card) == len(all_initial_game_infos)
-    print(f"[TEST PASSED] The length of set_player1_card: {len(set_player1_card)}")
-
 def generate_one_hot_encoding(cards: tuple[int], dimension: int = 52):
     return tuple(True if i in cards else False for i in range(dimension))
 
 def generate_action_encoding(action: tuple[int]):
-    action_int_combo_type = Utils.get_int_combo_type(action)
+    skip_int_encode = -1
+    if action == skip_int_encode:
+        action_int_combo_type = 19
+    else:
+        action_int_combo_type = Utils.get_int_combo_type(action)
+        assert action_int_combo_type < 19
     action_int_combo_type_encoding = generate_one_hot_encoding((action_int_combo_type,),
-                                                               dimension=19)
+                                                               dimension=20)
     assert action_int_combo_type_encoding.count(True) == 1        
-    max_card = max(action) if len(action) > 0 else -1
+    max_card = max(action) if (action != skip_int_encode and len(action) > 0) else -1
     return action_int_combo_type_encoding + (max_card,)
 
-def generate_list_state_action_return_encode(folder_data_dir):
-    initial_game_info_dir = os.path.join(folder_data_dir, "initial_game_info.pkl")
-    with open(initial_game_info_dir, "rb") as f:
-        initial_game_info = pickle.load(f)
-    player2_play_first = True if initial_game_info["who_play_first"] == 2 else False
-    list_file_data_dir = glob.glob(os.path.join(folder_data_dir, "state_*.pkl"))
-    assert len(list_file_data_dir) == len(os.listdir(folder_data_dir)) - 1
-    for file_data_dir in list_file_data_dir:
-        with open(file_data_dir, "rb") as f:
-            Q_table = pickle.load(f)
+def generate_player_card_encoding(player_card: tuple[tuple[int]]):
+    return tuple(
+        encoding
+        for player_id_card in player_card
+        for encoding in generate_one_hot_encoding(player_id_card)
+    )
 
-        for state in Q_table:
-            if len(Q_table[state]) <= 1: continue
-            player2_card, player1_action, actions_card_player1, actions_card_player2, deck_remain, len_player1_card = state
+def generate_player_action_encoding(player_action: tuple[tuple[int]]):
+    return tuple(
+        encoding
+        for player_id_action in player_action
+        for encoding in generate_action_encoding(player_id_action)
+    )
 
-            player2_card_encoding = generate_one_hot_encoding(player2_card)
-            player1_action_encoding = generate_action_encoding(player1_action)
-            player1_action_one_hot_encoding = generate_one_hot_encoding(player1_action)
-            actions_card_player1_encoding = generate_one_hot_encoding(actions_card_player1)
-            actions_card_player2_encoding = generate_one_hot_encoding(actions_card_player2)
-            deck_remain_encoding = generate_one_hot_encoding(deck_remain)
+def generate_actions_card_player_encoding(player_card, initial_player_card):
+    n_player = len(initial_player_card)
+    actions_card_player_encoding = tuple()
+    for i in range(n_player):
+        player_id_card = player_card[i]
+        initial_player_id_card = initial_player_card[i+1]
+        actions_card_player_id = tuple([
+            card for card in initial_player_id_card if card not in player_id_card
+        ])
+        assert len(player_id_card) + len(actions_card_player_id) == 13
+        assert set(player_id_card).union(set(actions_card_player_id)) == set(initial_player_id_card)
+        actions_card_player_encoding += generate_one_hot_encoding(actions_card_player_id)
+    return actions_card_player_encoding
 
-            for action in Q_table[state]:
-                expected_return = Q_table[state][action]
-                assert 0 <= expected_return <= 1
+def determine_early_mid_end_game_stage(player_card):
+    """
+    Determine the early, mid, or end game stage of the game.
+    Return 0 if the game is in the early game stage.
+    Return 1 if the game is in the mid game stage.
+    Return 2 if the game is in the end game stage.
+    """
+    assert len(player_card) == 3 and isinstance(player_card, tuple)
+    len_player2_card = len(player_card[1])
+    len_player3_card = len(player_card[2])
+    if len_player2_card >= 9 and len_player3_card >= 9:
+        return 0
+    elif len_player2_card <= 5 and len_player3_card <= 5:
+        return 2
+    else:
+        return 1
 
-                action_encoding = generate_action_encoding(action)
-                action_one_hot_encoding = generate_one_hot_encoding(action)
+def generate_list_state_action_return_encode(file_data_dir):
+    with open(file_data_dir, "rb") as f:
+        game_data = pickle.load(f)
+    Q_table = game_data["Q_table"]
+    who_play_first = game_data["who_play_first"]
+    initial_player_card = game_data["player_card"]
+    n_player = len(initial_player_card)
+    assert who_play_first in range(1, n_player + 1)
+    assert all(len(initial_player_card[i]) == 13 for i in range(1, n_player + 1))
+    who_play_first_encoding = generate_one_hot_encoding((who_play_first-1,), 
+                                                        dimension=n_player)
+    assert who_play_first_encoding.count(True) == 1
 
-                assert set(action).issubset(set(player2_card))
-                player2_card_remain = tuple([card for card in player2_card if card not in action])
-                player2_card_remain_encoding = generate_one_hot_encoding(player2_card_remain)
+    for state in Q_table:
+        if len(Q_table[state]) <= 1: continue
+        player_card, player_action, turn = state
+        assert len(player_card) == n_player
+        assert len(player_action) == n_player - 1
+        assert turn in range(1, n_player + 1)
 
-                state_action_return_encode = player2_card_encoding  + \
-                                            player1_action_encoding + player1_action_one_hot_encoding + \
-                                            actions_card_player1_encoding + actions_card_player2_encoding + \
-                                            deck_remain_encoding + \
-                                            (len_player1_card,) + action_encoding + action_one_hot_encoding + \
-                                            player2_card_remain_encoding + (player2_play_first, expected_return)
-                yield state_action_return_encode
+        player_card_encoding = generate_player_card_encoding(player_card)
+        player_action_encoding = generate_player_action_encoding(player_action)
+        actions_card_player_encoding = generate_actions_card_player_encoding(
+                                                player_card, initial_player_card)
+        turn_encoding = generate_one_hot_encoding((turn-1,), dimension=n_player)
+        assert turn_encoding.count(True) == 1
+        game_stage = determine_early_mid_end_game_stage(player_card)
+        assert game_stage in [0, 1, 2]
 
-def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and_preprocess_dir):
-    schema_columns = [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"player1_action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
-                    [(f"player1_action_max_card", pl.Int8)] + \
-                    [(f"player1_action_one_hot_encoding_{i}", pl.Boolean) for i in range(52)] + \
+        for action in Q_table[state]:
+            expected_return = Q_table[state][action]
+            assert expected_return in [-1, 1]
+            if expected_return == -1: expected_return = 0
+
+            action_encoding = generate_action_encoding(action)
+            assert set(action).issubset(set(player_card[0]))
+
+            state_action_return_encode = player_card_encoding + player_action_encoding + \
+                                        actions_card_player_encoding + turn_encoding + action_encoding + \
+                                        who_play_first_encoding + (game_stage, expected_return)
+            yield state_action_return_encode
+
+def undersample_df_table_for_mid_end_game_stage(df_table: pl.DataFrame):
+    n_early_game_stage_sample = (df_table.get_column('game_stage') == 0).sum()
+    print(f"n_early_game_stage_sample = {n_early_game_stage_sample:,}")
+    n_mid_game_stage_sample = (df_table.get_column('game_stage') == 1).sum()
+    print(f"[BEFORE] n_mid_game_stage_sample = {n_mid_game_stage_sample:,}")
+    n_mid_game_stage_sample = min(n_early_game_stage_sample * 2, n_mid_game_stage_sample)
+    print(f"[AFTER] n_mid_game_stage_sample = {n_mid_game_stage_sample:,}")
+    n_end_game_stage_sample = (df_table.get_column('game_stage') == 2).sum()
+    print(f"[BEFORE] n_end_game_stage_sample = {n_end_game_stage_sample:,}")
+    n_end_game_stage_sample = min(n_early_game_stage_sample * 2, n_end_game_stage_sample)
+    print(f"[AFTER] n_end_game_stage_sample = {n_end_game_stage_sample:,}")
+
+    df_early_game_stage = df_table.filter(pl.col('game_stage') == 0).sample(n=n_early_game_stage_sample)
+    df_mid_game_stage = df_table.filter(pl.col('game_stage') == 1).sample(n=n_mid_game_stage_sample)
+    df_end_game_stage = df_table.filter(pl.col('game_stage') == 2).sample(n=n_end_game_stage_sample)
+
+    df_undersampled = pl.concat([df_early_game_stage, df_mid_game_stage, df_end_game_stage])
+    print(f"Number of samples after undersampling: {len(df_undersampled):,}")
+    assert df_undersampled.shape[1] == df_early_game_stage.shape[1]
+    return df_undersampled.drop('game_stage')
+
+def create_polars_table_of_state_action_return_encode(list_tuple_file_data_and_preprocess_dir):
+    n_player = 3
+    schema_columns = [(f"player1_card_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"player3_card_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"player2_action_combo_type_{i}", pl.Boolean) for i in range(20)] + \
+                    [(f"player2_action_max_card", pl.Int8)] + \
+                    [(f"player3_action_combo_type_{i}", pl.Boolean) for i in range(20)] + \
+                    [(f"player3_action_max_card", pl.Int8)] + \
                     [(f"actions_card_player1_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"actions_card_player2_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"deck_remain_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"len_player1_card", pl.Int8)] + \
-                    [(f"action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
+                    [(f"actions_card_player3_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"turn_player{i}", pl.Boolean) for i in range(1, n_player + 1)] + \
+                    [(f"action_combo_type_{i}", pl.Boolean) for i in range(20)] + \
                     [(f"action_max_card", pl.Int8)] + \
-                    [(f"action_one_hot_encoding_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"player2_card_remain_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"player2_play_first", pl.Boolean)] + \
-                    [(f"expected_return", pl.Float64)]
-    for folder_data_dir, preprocess_file_dir in list_tuple_folder_data_and_preprocess_dir:
+                    [(f"player{i}_play_first", pl.Boolean) for i in range(1, n_player + 1)] + \
+                    [(f"game_stage", pl.Int8)] + \
+                    [(f"expected_return", pl.Int8)]
+    for file_data_dir, preprocess_file_dir in list_tuple_file_data_and_preprocess_dir:
         start_time = time.time()
-        df_table = pl.DataFrame(generate_list_state_action_return_encode(folder_data_dir), 
+        df_table = pl.DataFrame(generate_list_state_action_return_encode(file_data_dir), 
                                 schema=schema_columns)
+        df_table = undersample_df_table_for_mid_end_game_stage(df_table)
+        if len(df_table) == 0:
+            print(f"Ignore the empty df_table of file {file_data_dir}")
+            continue
         df_table.write_parquet(preprocess_file_dir)
-        print(f"Time to process folder {folder_data_dir} is: {time.time() - start_time} seconds")
+        print(f"Time to process file {file_data_dir} is: {time.time() - start_time} seconds")
         del df_table; gc.collect()
 
 if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"D:\Project\TLMN\data_3_1"
+    data_src_dir = r"D:\Project\TLMN\data_see_opponent_card_3_players"
 
-    cleaning_data(data_src_dir)
-    checking_duplicate_initial_game_info(data_src_dir)
-    def get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir):
-        for folder_data_name in os.listdir(data_src_dir):
-            folder_data_dir = os.path.join(data_src_dir, folder_data_name)
-            preprocess_file_dir = os.path.join(data_preprocess_folder_dir, folder_data_name) + ".parquet"
+    def get_tuple_file_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir):
+        for file_data_name in os.listdir(data_src_dir):
+            file_data_dir = os.path.join(data_src_dir, file_data_name)
+            preprocess_file_dir = os.path.join(data_preprocess_folder_dir, file_data_name)
+            preprocess_file_dir = preprocess_file_dir.replace(".pkl", ".parquet")
             assert not os.path.exists(preprocess_file_dir)
-            yield folder_data_dir, preprocess_file_dir
-    data_preprocess_folder_dir = join(dirname(data_src_dir), "preprocess", 
-                                      basename(data_src_dir) + "_preprocess")
+            yield file_data_dir, preprocess_file_dir
+    # data_preprocess_folder_dir = data_src_dir + "_preprocess"
+    data_preprocess_folder_dir = r"F:\data_see_opponent_card_3_players_preprocess"
     os.makedirs(data_preprocess_folder_dir)
     print(f"\nProcessing the {data_src_dir} folder...........")
-    list_tuple_folder_data_and_preprocess_dir = \
-        list(get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir))
+    list_tuple_file_data_and_preprocess_dir = \
+        list(get_tuple_file_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir))
     if sys.platform.startswith('win'):
         freeze_support()
     with Pool(processes=n_process) as pool:
         pool.map(create_polars_table_of_state_action_return_encode, 
-                np.array_split(list_tuple_folder_data_and_preprocess_dir, n_process))
+                np.array_split(list_tuple_file_data_and_preprocess_dir, n_process))
