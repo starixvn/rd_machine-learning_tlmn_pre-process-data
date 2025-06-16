@@ -1,19 +1,13 @@
 import os
 import pickle
 import gc
-from tqdm import tqdm
 import time
 import polars as pl
 import numpy as np
 import psutil
 import sys
-import glob
-from scipy import sparse
-from tienlen_libs import Utils, ActionGenerator, Card
-from os.path import dirname, basename, join
+from tienlen_libs import Utils
 from multiprocessing import Pool, freeze_support
-import math
-from collections import defaultdict
 
 
 def generate_one_hot_encoding(cards: tuple[int], dimension: int = 52):
@@ -112,7 +106,6 @@ def generate_list_state_action_return_encode(file_data_dir):
             if expected_return == -1: expected_return = 0
 
             action_encoding = generate_action_encoding(action)
-            assert set(action).issubset(set(player_card[0]))
 
             state_action_return_encode = player_card_encoding + player_action_encoding + \
                                         actions_card_player_encoding + turn_encoding + action_encoding + \
@@ -172,7 +165,7 @@ def create_polars_table_of_state_action_return_encode(list_tuple_file_data_and_p
 
 if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"D:\Project\TLMN\data_see_opponent_card_3_players"
+    data_src_dir = r"D:\Project\TLMN\data_see_opponent_card_3_players_part3"
 
     def get_tuple_file_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir):
         for file_data_name in os.listdir(data_src_dir):
@@ -182,7 +175,7 @@ if __name__ == "__main__":
             assert not os.path.exists(preprocess_file_dir)
             yield file_data_dir, preprocess_file_dir
     # data_preprocess_folder_dir = data_src_dir + "_preprocess"
-    data_preprocess_folder_dir = r"F:\data_see_opponent_card_3_players_preprocess"
+    data_preprocess_folder_dir = r"F:\data_see_opponent_card_3_players_part3_preprocess"
     os.makedirs(data_preprocess_folder_dir)
     print(f"\nProcessing the {data_src_dir} folder...........")
     list_tuple_file_data_and_preprocess_dir = \
