@@ -154,43 +154,44 @@ def generate_list_state_action_return_encode(folder_data_dir):
 
             player2_card_encoding = generate_one_hot_encoding(player2_card)
             player1_action_encoding = generate_action_encoding(player1_action)
-            player1_action_one_hot_encoding = generate_one_hot_encoding(player1_action)
             actions_card_player1_encoding = generate_one_hot_encoding(actions_card_player1)
             actions_card_player2_encoding = generate_one_hot_encoding(actions_card_player2)
             deck_remain_encoding = generate_one_hot_encoding(deck_remain)
+            len_player1_card_encoding = generate_one_hot_encoding((len_player1_card-1,), dimension=13)
 
             for action in Q_table[state]:
                 expected_return = Q_table[state][action]
                 assert 0 <= expected_return <= 1
 
-                action_encoding = generate_action_encoding(action)
-                action_one_hot_encoding = generate_one_hot_encoding(action)
+                # action_encoding = generate_action_encoding(action)
+                action_encoding = generate_one_hot_encoding(action)
 
-                assert set(action).issubset(set(player2_card))
-                player2_card_remain = tuple([card for card in player2_card if card not in action])
-                player2_card_remain_encoding = generate_one_hot_encoding(player2_card_remain)
-
-                state_action_return_encode = player2_card_encoding  + \
-                                            player1_action_encoding + player1_action_one_hot_encoding + \
+                state_action_return_encode = player2_card_encoding + player1_action_encoding + \
                                             actions_card_player1_encoding + actions_card_player2_encoding + \
-                                            deck_remain_encoding + \
-                                            (len_player1_card,) + action_encoding + action_one_hot_encoding + \
-                                            player2_card_remain_encoding + (player2_play_first, expected_return)
+                                            deck_remain_encoding + len_player1_card_encoding + \
+                                            action_encoding + (player2_play_first, expected_return)
                 yield state_action_return_encode
 
 def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and_preprocess_dir):
+    # schema_columns = [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
+    #                 [(f"player1_action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
+    #                 [(f"player1_action_max_card", pl.Int8)] + \
+    #                 [(f"actions_card_player1_{i}", pl.Boolean) for i in range(52)] + \
+    #                 [(f"actions_card_player2_{i}", pl.Boolean) for i in range(52)] + \
+    #                 [(f"deck_remain_{i}", pl.Boolean) for i in range(52)] + \
+    #                 [(f"len_player1_card_{i+1}", pl.Boolean) for i in range(13)] + \
+    #                 [(f"action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
+    #                 [(f"action_max_card", pl.Int8)] + \
+    #                 [(f"player2_play_first", pl.Boolean)] + \
+    #                 [(f"expected_return", pl.Float64)]
     schema_columns = [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"player1_action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
                     [(f"player1_action_max_card", pl.Int8)] + \
-                    [(f"player1_action_one_hot_encoding_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"actions_card_player1_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"actions_card_player2_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"deck_remain_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"len_player1_card", pl.Int8)] + \
-                    [(f"action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
-                    [(f"action_max_card", pl.Int8)] + \
-                    [(f"action_one_hot_encoding_{i}", pl.Boolean) for i in range(52)] + \
-                    [(f"player2_card_remain_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"len_player1_card_{i+1}", pl.Boolean) for i in range(13)] + \
+                    [(f"action_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"player2_play_first", pl.Boolean)] + \
                     [(f"expected_return", pl.Float64)]
     for folder_data_dir, preprocess_file_dir in list_tuple_folder_data_and_preprocess_dir:
@@ -203,7 +204,7 @@ def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and
 
 if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"D:\Project\TLMN\data_3_1"
+    data_src_dir = r"D:\Project\TLMN\data_4_1"
 
     cleaning_data(data_src_dir)
     checking_duplicate_initial_game_info(data_src_dir)
