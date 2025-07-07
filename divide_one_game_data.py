@@ -48,14 +48,10 @@ if __name__ == "__main__":
         for file_data_name in os.listdir(data_src_dir):
             file_data_dir = os.path.join(data_src_dir, file_data_name)
             yield file_data_dir, write_dir, n_part
-            # root_file_name = find_root_file_name(file_data_dir)
-            # write_foler = os.path.join(write_dir, root_file_name)
-            # if not os.path.exists(write_foler):
-            #     yield file_data_dir, write_dir, n_part
 
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"F:\data_see_opponent_card_3_players\data_train"
-    write_dir = r"D:\Project\TLMN\data_see_opponent_card_3_players_divide\data_train"
+    data_src_dir = r"F:\data_see_opponent_card_4_players\data_validation"
+    write_dir = r"F:\data_see_opponent_card_4_players\data_validation_divide"
     n_part = 10
     
     print(f"\nProcessing the {data_src_dir} folder...........")
