@@ -134,8 +134,13 @@ def generate_action_encoding(action: tuple[int]):
     action_int_combo_type_encoding = generate_one_hot_encoding((action_int_combo_type,),
                                                                dimension=19)
     assert action_int_combo_type_encoding.count(True) == 1        
-    max_card = max(action) if len(action) > 0 else -1
-    return action_int_combo_type_encoding + (max_card,)
+    if len(action) > 0:
+        max_card = max(action)
+        max_card_encoding = generate_one_hot_encoding((max_card,))
+        assert max_card_encoding.count(True) == 1
+    else:
+        max_card_encoding = tuple(False for _ in range(52))
+    return action_int_combo_type_encoding + max_card_encoding
 
 def generate_list_state_action_return_encode(folder_data_dir):
     initial_game_info_dir = os.path.join(folder_data_dir, "initial_game_info.pkl")
@@ -163,8 +168,7 @@ def generate_list_state_action_return_encode(folder_data_dir):
                 expected_return = Q_table[state][action]
                 assert 0 <= expected_return <= 1
 
-                # action_encoding = generate_action_encoding(action)
-                action_encoding = generate_one_hot_encoding(action)
+                action_encoding = generate_action_encoding(action)
 
                 state_action_return_encode = player2_card_encoding + player1_action_encoding + \
                                             actions_card_player1_encoding + actions_card_player2_encoding + \
@@ -173,33 +177,23 @@ def generate_list_state_action_return_encode(folder_data_dir):
                 yield state_action_return_encode
 
 def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and_preprocess_dir):
-    # schema_columns = [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
-    #                 [(f"player1_action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
-    #                 [(f"player1_action_max_card", pl.Int8)] + \
-    #                 [(f"actions_card_player1_{i}", pl.Boolean) for i in range(52)] + \
-    #                 [(f"actions_card_player2_{i}", pl.Boolean) for i in range(52)] + \
-    #                 [(f"deck_remain_{i}", pl.Boolean) for i in range(52)] + \
-    #                 [(f"len_player1_card_{i+1}", pl.Boolean) for i in range(13)] + \
-    #                 [(f"action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
-    #                 [(f"action_max_card", pl.Int8)] + \
-    #                 [(f"player2_play_first", pl.Boolean)] + \
-    #                 [(f"expected_return", pl.Float64)]
     schema_columns = [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"player1_action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
-                    [(f"player1_action_max_card", pl.Int8)] + \
+                    [(f"player1_action_max_card_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"actions_card_player1_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"actions_card_player2_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"deck_remain_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"len_player1_card_{i+1}", pl.Boolean) for i in range(13)] + \
-                    [(f"action_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
+                    [(f"action_max_card_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"player2_play_first", pl.Boolean)] + \
                     [(f"expected_return", pl.Float64)]
-    for folder_data_dir, preprocess_file_dir in list_tuple_folder_data_and_preprocess_dir:
+    for folder_data_dir, preprocess_file_dir in tqdm(list_tuple_folder_data_and_preprocess_dir):
         start_time = time.time()
         df_table = pl.DataFrame(generate_list_state_action_return_encode(folder_data_dir), 
                                 schema=schema_columns)
         df_table.write_parquet(preprocess_file_dir)
-        print(f"Time to process folder {folder_data_dir} is: {time.time() - start_time} seconds")
+        # print(f"Time to process folder {folder_data_dir} is: {time.time() - start_time} seconds")
         del df_table; gc.collect()
 
 if __name__ == "__main__":
