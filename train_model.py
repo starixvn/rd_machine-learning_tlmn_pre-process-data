@@ -19,11 +19,19 @@ class CustomDataGenerator(keras.utils.Sequence):
         self.dataset_type = dataset_type
         self.shuffle = shuffle
         self.dataset = self.read_dataset()
-    
+        self.bool_cols = self.__get_boolean_columns()
+
+    def __get_boolean_columns(self):
+        schema = pl.scan_parquet(os.path.join(self.src_data, 
+                                f"data_{self.dataset_type}.parquet")).collect_schema()
+        bool_cols = [col for col, dtype in schema.items() if dtype == pl.Boolean]
+        assert len(bool_cols) == len(schema) - 1
+        return bool_cols
+
     def read_dataset(self):
         dataset = pl.read_parquet(os.path.join(self.src_data, 
                                                f"data_{self.dataset_type}.parquet"))
-        print(f"The shape of the dataset is ({dataset.shape[0]:,}; {dataset.shape[1]})")
+        print(f"The shape of the dataset {self.dataset_type} is ({dataset.shape[0]:,}; {dataset.shape[1]})")
         return dataset.sample(fraction=1.0, shuffle=True)
 
     def on_epoch_end(self):
@@ -38,20 +46,14 @@ class CustomDataGenerator(keras.utils.Sequence):
         return math.ceil(len(self.dataset) / self.batch_size)
 
     def normalize_dataset(self, dataset: pl.DataFrame):
-        bool_cols = [col for col in dataset.columns if dataset[col].dtype == pl.Boolean]
         dataset = dataset.with_columns(
             [
-                pl.col(bool_cols).cast(pl.Int8),  # Convert boolean columns to Int8
-                (pl.col("player1_action_max_card") + 1) / 52,  # Normalize player1_action_max_card
-                (pl.col("action_max_card") + 1) / 52,  # Normalize action_max_card
-                (pl.col("len_player1_card") - 1) / 12,  # Normalize len_player1_card
+                pl.col(self.bool_cols).cast(pl.Float64),  # Convert boolean columns to Float
             ]
         )
         return dataset
 
     def __getitem__(self, index):
-        # batch_data = sparse.load_npz(os.path.join(self.src_data, 
-        #                     f"data_{self.dataset_type}_batch_{index}.npz")).toarray()
         batch_data = self.dataset[(index * self.batch_size): ((index + 1) * self.batch_size)]
         batch_data = self.normalize_dataset(batch_data)
         batch_data = batch_data.to_numpy()
@@ -60,8 +62,8 @@ class CustomDataGenerator(keras.utils.Sequence):
         return X, y
 
 
-src_data = r"data"
-batch_size = 64
+src_data = r"D:\Project\TLMN\preprocess"
+batch_size = 512
 data_train_generator = CustomDataGenerator(
     src_data=src_data,
     batch_size=batch_size,
@@ -94,17 +96,18 @@ model.add(layers.PReLU(alpha_initializer=keras.initializers.Constant(value=0.25)
 model.add(layers.Dense(16, kernel_initializer='he_normal'))
 model.add(layers.BatchNormalization())
 model.add(layers.PReLU(alpha_initializer=keras.initializers.Constant(value=0.25)))
-# model.add(layers.Dense(1, activation="linear"))
 model.add(layers.Dense(1, activation="sigmoid"))
 model.summary()
 
 model.compile(optimizer="adam", loss="mse", metrics=["mae"])
 model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
-    filepath=r"tmp_test.keras",
+    filepath=r"TLMN_2_players_honestly_new.keras",
     monitor='val_mae',
     mode='min',
-    save_best_only=True)
+    save_best_only=True,
+    verbose=1)
 
 history = model.fit(data_train_generator, 
                     validation_data=data_validation_generator,
-                    callbacks=[model_checkpoint_callback], epochs=50)
+                    callbacks=[model_checkpoint_callback], 
+                    epochs=50)
