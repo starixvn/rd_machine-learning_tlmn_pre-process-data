@@ -119,12 +119,16 @@ def checking_duplicate_initial_game_info(data_src_dir):
     all_initial_game_infos = glob.glob(os.path.join(data_src_dir, '**/initial_game_info.pkl'), recursive=True)
     assert len(all_initial_game_infos) == len(os.listdir(data_src_dir))
     set_player1_card = set()
+    set_player2_card = set()
     for initial_game_info_dir in all_initial_game_infos:
         with open(initial_game_info_dir, 'rb') as f:
             initial_game_info = pickle.load(f)
         set_player1_card.add(initial_game_info["player1_card"])
+        set_player2_card.add(initial_game_info["player2_card"])
     assert len(set_player1_card) == len(all_initial_game_infos)
+    assert len(set_player2_card) == len(all_initial_game_infos)
     print(f"[TEST PASSED] The length of set_player1_card: {len(set_player1_card)}")
+    print(f"[TEST PASSED] The length of set_player2_card: {len(set_player2_card)}")
 
 def generate_one_hot_encoding(cards: tuple[int], dimension: int = 52):
     return tuple(True if i in cards else False for i in range(dimension))
