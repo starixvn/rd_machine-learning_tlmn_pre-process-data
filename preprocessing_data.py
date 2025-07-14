@@ -202,7 +202,7 @@ def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and
 
 if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"D:\Project\TLMN\data_13_11"
+    data_src_dir = r"D:\Project\TLMN\data_special_case"
 
     cleaning_data(data_src_dir)
     checking_duplicate_initial_game_info(data_src_dir)
@@ -214,7 +214,7 @@ if __name__ == "__main__":
                 yield folder_data_dir, preprocess_file_dir
     data_preprocess_folder_dir = join(dirname(data_src_dir), "preprocess", 
                                       basename(data_src_dir) + "_preprocess")
-    os.makedirs(data_preprocess_folder_dir, exist_ok=True)
+    os.makedirs(data_preprocess_folder_dir)
     print(f"\nProcessing the {data_src_dir} folder...........")
     list_tuple_folder_data_and_preprocess_dir = \
         list(get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir))
