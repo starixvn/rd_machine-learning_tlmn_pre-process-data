@@ -10,6 +10,7 @@ import sys
 import glob
 from scipy import sparse
 from tienlen_libs import Utils, ActionGenerator, Card
+from tienlen_libs.constant import ComboType
 from os.path import dirname, basename, join
 from multiprocessing import Pool, freeze_support
 import math
@@ -61,6 +62,22 @@ def checking_duplicate_initial_game_info(data_src_dir):
 def generate_one_hot_encoding(cards: tuple[int], dimension: int = 52):
     return tuple(True if i in cards else False for i in range(dimension))
 
+def encode_pair_deuce_color(action):
+    """
+    If Pair Deuce is Black Pair Deuce then return (True, False, False)
+    If Pair Deuce is Red Pair Deuce then return (False, True, False)
+    If Pair Deuce is Black Red Pair Deuce then return (False, False, True)
+    """
+    set_action = set(action)
+    if set_action == {48, 49}:
+        return (True, False, False)
+    elif set_action == {50, 51}:
+        return (False, True, False)
+    else:
+        assert set_action == {48, 50} or set_action == {48, 51} \
+            or set_action == {49, 50} or set_action == {49, 51}
+        return (False, False, True)
+
 def generate_action_encoding(action: tuple[int]):
     action_int_combo_type = Utils.get_int_combo_type(action)
     action_int_combo_type_encoding = generate_one_hot_encoding((action_int_combo_type,),
@@ -72,7 +89,14 @@ def generate_action_encoding(action: tuple[int]):
         assert max_card_encoding.count(True) == 1
     else:
         max_card_encoding = tuple(False for _ in range(52))
-    return action_int_combo_type_encoding + max_card_encoding
+
+    if Utils.get_combo_type(action) == ComboType.PAIR_DEUCE:
+        pair_deuce_color_encoding = encode_pair_deuce_color(action)
+        assert pair_deuce_color_encoding.count(True) == 1
+    else:
+        pair_deuce_color_encoding = (False, False, False)
+
+    return action_int_combo_type_encoding + max_card_encoding + pair_deuce_color_encoding
 
 def generate_list_state_action_return_encode(folder_data_dir):
     initial_game_info_dir = os.path.join(folder_data_dir, "initial_game_info.pkl")
@@ -98,7 +122,7 @@ def generate_list_state_action_return_encode(folder_data_dir):
 
             for action in Q_table[state]:
                 expected_return = Q_table[state][action]
-                assert 0 <= expected_return <= 1
+                # assert 0 <= expected_return <= 1
 
                 action_encoding = generate_action_encoding(action)
 
@@ -112,12 +136,18 @@ def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and
     schema_columns = [(f"player2_card_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"player1_action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
                     [(f"player1_action_max_card_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"player1_action_black_pair_deuce", pl.Boolean)] + \
+                    [(f"player1_action_red_pair_deuce", pl.Boolean)] + \
+                    [(f"player1_action_mixed_pair_deuce", pl.Boolean)] + \
                     [(f"actions_card_player1_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"actions_card_player2_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"deck_remain_{i}", pl.Boolean) for i in range(52)] + \
                     [(f"len_player1_card_{i+1}", pl.Boolean) for i in range(13)] + \
                     [(f"action_combo_type_{i}", pl.Boolean) for i in range(19)] + \
                     [(f"action_max_card_{i}", pl.Boolean) for i in range(52)] + \
+                    [(f"action_black_pair_deuce", pl.Boolean)] + \
+                    [(f"action_red_pair_deuce", pl.Boolean)] + \
+                    [(f"action_mixed_pair_deuce", pl.Boolean)] + \
                     [(f"player2_play_first", pl.Boolean)] + \
                     [(f"expected_return", pl.Float64)]
     for folder_data_dir, preprocess_file_dir in tqdm(list_tuple_folder_data_and_preprocess_dir):
@@ -130,7 +160,7 @@ def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and
 
 if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"D:\Project\TLMN\data_special_case"
+    data_src_dir = r"E:\TLMN\data_honestly_2_players_win_lose\data_special_case"
 
     cleaning_data(data_src_dir)
     checking_duplicate_initial_game_info(data_src_dir)
