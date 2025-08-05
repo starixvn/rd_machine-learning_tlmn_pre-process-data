@@ -102,6 +102,7 @@ def generate_list_state_action_return_encode(folder_data_dir):
     initial_game_info_dir = os.path.join(folder_data_dir, "initial_game_info.pkl")
     with open(initial_game_info_dir, "rb") as f:
         initial_game_info = pickle.load(f)
+    assert initial_game_info["version"] == "final"
     player2_play_first = True if initial_game_info["who_play_first"] == 2 else False
     list_file_data_dir = glob.glob(os.path.join(folder_data_dir, "state_*.pkl"))
     assert len(list_file_data_dir) == len(os.listdir(folder_data_dir)) - 1
@@ -122,7 +123,7 @@ def generate_list_state_action_return_encode(folder_data_dir):
 
             for action in Q_table[state]:
                 expected_return = Q_table[state][action]
-                # assert 0 <= expected_return <= 1
+                assert -100 <= expected_return <= 100
 
                 action_encoding = generate_action_encoding(action)
 
@@ -160,26 +161,28 @@ def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and
 
 if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False)
-    data_src_dir = r"E:\TLMN\data_honestly_2_players_win_lose\data_special_case"
-
-    cleaning_data(data_src_dir)
-    checking_duplicate_initial_game_info(data_src_dir)
-    def get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir):
-        for folder_data_name in os.listdir(data_src_dir):
-            folder_data_dir = os.path.join(data_src_dir, folder_data_name)
-            preprocess_file_dir = os.path.join(data_preprocess_folder_dir, folder_data_name) + ".parquet"
-            if not os.path.exists(preprocess_file_dir):
-                yield folder_data_dir, preprocess_file_dir
-    data_preprocess_folder_dir = join(dirname(data_src_dir), "preprocess", 
-                                      basename(data_src_dir) + "_preprocess")
-    os.makedirs(data_preprocess_folder_dir)
-    print(f"\nProcessing the {data_src_dir} folder...........")
-    list_tuple_folder_data_and_preprocess_dir = \
-        list(get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir))
-    print(f"The number of folder need to process: {len(list_tuple_folder_data_and_preprocess_dir)}", end=", ")
-    print(f"TOTAL: {len(os.listdir(data_src_dir))}")
-    if sys.platform.startswith('win'):
-        freeze_support()
-    with Pool(processes=n_process) as pool:
-        pool.map(create_polars_table_of_state_action_return_encode, 
-                np.array_split(list_tuple_folder_data_and_preprocess_dir, n_process))
+    all_data_src_dir = r"F:\TLMN_2_players"
+    list_all_data_src_folder = glob.glob(os.path.join(all_data_src_dir, '*'))
+    print(f"list_all_data_src_folder: {list_all_data_src_folder}")
+    for data_src_dir in list_all_data_src_folder:
+        print(f"\nProcessing the {data_src_dir} folder...........")
+        cleaning_data(data_src_dir)
+        checking_duplicate_initial_game_info(data_src_dir)
+        def get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir):
+            for folder_data_name in os.listdir(data_src_dir):
+                folder_data_dir = os.path.join(data_src_dir, folder_data_name)
+                preprocess_file_dir = os.path.join(data_preprocess_folder_dir, folder_data_name) + ".parquet"
+                if not os.path.exists(preprocess_file_dir):
+                    yield folder_data_dir, preprocess_file_dir
+        data_preprocess_folder_dir = join(dirname(data_src_dir), "preprocess", 
+                                        basename(data_src_dir) + "_preprocess")
+        os.makedirs(data_preprocess_folder_dir)
+        list_tuple_folder_data_and_preprocess_dir = \
+            list(get_tuple_folder_data_and_preprocess_dir(data_src_dir, data_preprocess_folder_dir))
+        print(f"The number of folder need to process: {len(list_tuple_folder_data_and_preprocess_dir)}", end=", ")
+        print(f"TOTAL: {len(os.listdir(data_src_dir))}")
+        if sys.platform.startswith('win'):
+            freeze_support()
+        with Pool(processes=n_process) as pool:
+            pool.map(create_polars_table_of_state_action_return_encode, 
+                    np.array_split(list_tuple_folder_data_and_preprocess_dir, n_process))
