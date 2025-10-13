@@ -102,7 +102,7 @@ def generate_list_state_action_return_encode(folder_data_dir):
     initial_game_info_dir = os.path.join(folder_data_dir, "initial_game_info.pkl")
     with open(initial_game_info_dir, "rb") as f:
         initial_game_info = pickle.load(f)
-    assert initial_game_info["version"] == "final"
+    assert initial_game_info["version"] == "hard_mode"
     player2_play_first = True if initial_game_info["who_play_first"] == 2 else False
     list_file_data_dir = glob.glob(os.path.join(folder_data_dir, "state_*.pkl"))
     assert len(list_file_data_dir) == len(os.listdir(folder_data_dir)) - 1
@@ -160,8 +160,8 @@ def create_polars_table_of_state_action_return_encode(list_tuple_folder_data_and
         del df_table; gc.collect()
 
 if __name__ == "__main__":
-    n_process = psutil.cpu_count(logical=False)
-    all_data_src_dir = r"F:\TLMN_2_players"
+    n_process = psutil.cpu_count(logical=False) - 1
+    all_data_src_dir = r"F:\TLMN_2_players_hard_level"
     list_all_data_src_folder = glob.glob(os.path.join(all_data_src_dir, '*'))
     print(f"list_all_data_src_folder: {list_all_data_src_folder}")
     for data_src_dir in list_all_data_src_folder:

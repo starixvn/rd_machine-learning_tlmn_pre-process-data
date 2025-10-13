@@ -34,12 +34,16 @@ def check_data(src_data, des_dir):
 
 start_time = time.time()
 
-# copy_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_2_players\data_final_13_11")
-# copy_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_2_players\data_final_10_8")
-# copy_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_2_players\data_final_7_5")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_2_players_hard_level\data_hard_13_11")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_2_players_hard_level\data_hard_10_8")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_2_players_hard_level\data_hard_7_5")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_4_3", r"F:\TLMN_2_players_hard_level\data_hard_4_3")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_2_1", r"F:\TLMN_2_players_hard_level\data_hard_2_1")
 
-check_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_2_players\data_final_13_11")
-check_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_2_players\data_final_10_8")
-check_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_2_players\data_final_7_5")
+# check_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_2_players_hard_level\data_hard_13_11")
+# check_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_2_players_hard_level\data_hard_10_8")
+# check_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_2_players_hard_level\data_hard_7_5")
+check_data(r"\\10.18.200.241\public\aibot\data_full_4_3", r"F:\TLMN_2_players_hard_level\data_hard_4_3")
+check_data(r"\\10.18.200.241\public\aibot\data_full_2_1", r"F:\TLMN_2_players_hard_level\data_hard_2_1")
 
 print(f"Time taken: {time.time() - start_time:.2f} seconds")

@@ -62,8 +62,8 @@ class CustomDataGenerator(keras.utils.Sequence):
         return X, y
 
 
-src_data = r"D:\Project\TLMN\preprocess"
-batch_size = 512
+src_data = r"data"
+batch_size = 256
 data_train_generator = CustomDataGenerator(
     src_data=src_data,
     batch_size=batch_size,
@@ -96,12 +96,12 @@ model.add(layers.PReLU(alpha_initializer=keras.initializers.Constant(value=0.25)
 model.add(layers.Dense(16, kernel_initializer='he_normal'))
 model.add(layers.BatchNormalization())
 model.add(layers.PReLU(alpha_initializer=keras.initializers.Constant(value=0.25)))
-model.add(layers.Dense(1, activation="sigmoid"))
+model.add(layers.Dense(1, activation="linear"))
 model.summary()
 
 model.compile(optimizer="adam", loss="mse", metrics=["mae"])
 model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
-    filepath=r"TLMN_2_players_honestly_new.keras",
+    filepath=r"Bot_TLMN_solo_hard_level.keras",
     monitor='val_mae',
     mode='min',
     save_best_only=True,

@@ -1,6 +1,7 @@
 from collections import defaultdict
 import time
 from tienlen_libs import Card, ActionGenerator, Utils, NaturalWin, Reward
+from tienlen_libs.constant import ComboType
 import pickle
 from multiprocessing import Pool, freeze_support
 import os
@@ -1164,17 +1165,13 @@ class Game_Simulation(object):
         np.random.shuffle(full_deck)
         player1_card = full_deck[:13]; player1_card.sort()
         player2_card = full_deck[13:26]; player2_card.sort()
-        # player1_card = "4s 4h 5h 6s 7s 7d 7h Tc Qs Qh Ks 2s 2h"
-        # player1_card = [Card.new(elem) for elem in player1_card.split()]
-        # player2_card = "3c 4c 5c 5d 6d 6h 8c 8d 9s Th Js Ac Ah"
-        # player2_card = [Card.new(elem) for elem in player2_card.split()]
         print("\nPlayer1 cards: ", end=""); Card.print_pretty_cards(player1_card)
         print("Player2 cards: ", end=""); Card.print_pretty_cards(player2_card)
         if natural_win.detect_natural_win(player1_card) or natural_win.detect_natural_win(player2_card):
             print("Natural Win Detected: SKIPPING this game!!!")
             return
         
-        who_play_first = random.choice([1])
+        who_play_first = random.choice([1, 2])
         player1_action = self.run_rule_based_bot([], player1_card) if who_play_first == 1 else []
         player1_card = [card for card in player1_card if card not in player1_action]
         print(f"Player {who_play_first} plays first")
@@ -1190,7 +1187,8 @@ class Game_Simulation(object):
 
             #Player 2 turn
             print(f"Player 2 card: ", end=""); Card.print_pretty_cards(player2_card)
-            player2_action = self.dirty_bot.choose_best_action_with_max_Q_value(state, who_play_first)
+            I_play_first = 1 if who_play_first == 2 else 0
+            player2_action = self.dirty_bot.choose_best_action_with_max_Q_value(state, I_play_first)
             print(f"Player 2 action: ", end=""); Card.print_pretty_cards(player2_action)
             player2_card = [card for card in player2_card if card not in player2_action]
             if len(player2_card) == 0:
@@ -1216,59 +1214,134 @@ class Game_Simulation(object):
 class Dirty_Bot(object):
     def __init__(self):
         self.action_generator = ActionGenerator()
-        self.MLP_model = load_model(r"models\TLMN_2_player.keras")
+        self.MLP_model = load_model(r"C:\Users\justin.pham\OneDrive\Documents\Code\TLMN\bot-see-opponent-cards\src\models\Bot_TLMN_solo_medium_level.keras")
      
     def generate_one_hot_encoding(self, cards: tuple[int], dimension: int = 52):
         return tuple(1 if i in cards else 0 for i in range(dimension))
     
+    def encode_pair_deuce_color(self, action):
+        """
+        If Pair Deuce is Black Pair Deuce then return (1, 0, 0)
+        If Pair Deuce is Red Pair Deuce then return (0, 1, 0)
+        If Pair Deuce is Black Red Pair Deuce then return (0, 0, 1)
+        """
+        set_action = set(action)
+        if set_action == {48, 49}:
+            return (1, 0, 0)
+        elif set_action == {50, 51}:
+            return (0, 1, 0)
+        else:
+            assert set_action == {48, 50} or set_action == {48, 51} \
+                or set_action == {49, 50} or set_action == {49, 51}
+            return (0, 0, 1)
+
     def generate_action_encoding(self, action: tuple[int]):
         action_int_combo_type = Utils.get_int_combo_type(action)
         action_int_combo_type_encoding = self.generate_one_hot_encoding((action_int_combo_type,),
                                                                         dimension=19)
         assert action_int_combo_type_encoding.count(1) == 1        
-        max_card = max(action) if len(action) > 0 else -1
-        max_card = (max_card + 1) / 52
-        return action_int_combo_type_encoding + (max_card,)
-    
-    def encode_state_to_model_input(self, state, action, who_play_first):
-        assert who_play_first in [1, 2]
-        player2_play_first = 1 if who_play_first == 2 else 0
+        if len(action) > 0:
+            max_card = max(action)
+            max_card_encoding = self.generate_one_hot_encoding((max_card,))
+            assert max_card_encoding.count(1) == 1
+        else:
+            max_card_encoding = tuple(0 for _ in range(52))
 
+        if Utils.get_combo_type(action) == ComboType.PAIR_DEUCE:
+            pair_deuce_color_encoding = self.encode_pair_deuce_color(action)
+            assert pair_deuce_color_encoding.count(1) == 1
+        else:
+            pair_deuce_color_encoding = (0, 0, 0)
+
+        return action_int_combo_type_encoding + max_card_encoding + pair_deuce_color_encoding
+    
+    def encode_state(self, state):
         player2_card, player1_action, actions_card_player1, actions_card_player2, deck_remain, len_player1_card = state
         player2_card_encoding = self.generate_one_hot_encoding(player2_card)
         player1_action_encoding = self.generate_action_encoding(player1_action)
         actions_card_player1_encoding = self.generate_one_hot_encoding(actions_card_player1)
         actions_card_player2_encoding = self.generate_one_hot_encoding(actions_card_player2)
         deck_remain_encoding = self.generate_one_hot_encoding(deck_remain)
-        len_player1_card = (len_player1_card - 1) / 12
+        len_player1_card_encoding = self.generate_one_hot_encoding((len_player1_card-1,), dimension=13)
 
-        action_encoding = self.generate_action_encoding(action)
-
-        state_action_encode = player2_card_encoding + player1_action_encoding + \
-                              actions_card_player1_encoding + actions_card_player2_encoding + \
-                              deck_remain_encoding + (len_player1_card,) + action_encoding + \
-                              (player2_play_first,)
-        return np.array([state_action_encode])
+        state_encode = player2_card_encoding + player1_action_encoding + \
+                    actions_card_player1_encoding + actions_card_player2_encoding + \
+                    deck_remain_encoding + len_player1_card_encoding 
+                    # action_encoding + (player2_play_first, expected_return)
+        return state_encode
     
-    def predict_Q_value_of_state_action(self, state, action, who_play_first):
-        sample_input = self.encode_state_to_model_input(state, action, who_play_first)
-        assert all(x >= 0 and x <= 1 for x in sample_input.flatten()), "Input must contain only 0s and 1s"
-        Q_value = self.MLP_model.predict(sample_input, verbose=0)[0][0]
-        return Q_value
+    def predict_Q_value(self, list_state_action_encode):
+        state_action_array = np.array(list_state_action_encode, dtype=np.float64)
+        assert all(x in [0, 1] for x in state_action_array.flatten()), "Input must contain only 0s and 1s"
+        Q_values = self.MLP_model.predict(state_action_array, verbose=1).flatten()
+        return Q_values
+    
+    def print_list_valid_action_player2(self, list_valid_action_player2):
+        print(f"List valid action: ", end="")
+        for action in list_valid_action_player2:
+            if len(action) == 0:
+                print("PASS", end="; ")
+            else:
+                Card.print_pretty_cards(action, end="; ")
+        print()
 
-    def choose_best_action_with_max_Q_value(self, state, who_play_first):
+    def choose_best_action_with_max_Q_value(self, state, I_play_first):
+        state_encoding = self.encode_state(state)
+        assert I_play_first in [1, 0]
+        player2_play_first = I_play_first
+
         player2_card, player1_action, _, _, _, _ = state
         list_valid_action_player2 = self.action_generator.get_list_valid_action(player2_card, player1_action)
-        action_to_Q_value = {}
+        self.print_list_valid_action_player2(list_valid_action_player2)
+        if len(list_valid_action_player2) == 1: return list_valid_action_player2[0]
+        list_state_action_encode = []
         for action in list_valid_action_player2:
-            Q_value = self.predict_Q_value_of_state_action(state, action, who_play_first)
-            print("Action: ", end=""); Card.print_pretty_cards(action, end=" => ")
-            print(f"Q_value = {Q_value}")
-            action_to_Q_value[action] = Q_value
+            action_encoding = self.generate_action_encoding(action)
+            state_action_encode = state_encoding + action_encoding + (player2_play_first,)
+            assert len(state_action_encode) == 370
+            list_state_action_encode.append(state_action_encode)
+
+        Q_values = self.predict_Q_value(list_state_action_encode)
+        action_to_Q_value = dict(zip(list_valid_action_player2, Q_values))
+        for action, Q_value in action_to_Q_value.items():
+            print("Action: ", end=""); Card.print_pretty_cards(action, end=" => ")            
+            print(f"Q_value = {float(Q_value)}")
         player2_action = max(action_to_Q_value.items(), key=lambda x: x[1])[0]
         return player2_action
 
 
 if __name__ == "__main__":
     bot_simulation = Game_Simulation()
-    bot_simulation.run_one_game()
+    # bot_simulation.run_one_game()
+
+    opponent_move = [Card.new("8s"), Card.new("8d")]
+    my_card = [Card.new("6c"), Card.new("7c"), Card.new("8h"), Card.new("9c"), Card.new("Td"), 
+               Card.new("Th"), Card.new("Jh"), Card.new("Qc"), Card.new("Kd"), Card.new("Ah")]
+    
+    print("\nJustin bot card: ", end=""); Card.print_pretty_cards(opponent_move + [Card.new("2h")])
+    print("Justin Action: ", end=""); Card.print_pretty_cards(opponent_move)
+    print("TL-AI bot cards: ", end=""); Card.print_pretty_cards(my_card)
+    tmp = bot_simulation.run_rule_based_bot(opponent_move, my_card)
+    print("TL-AI Action: ", end=""); Card.print_pretty_cards(tmp) if len(tmp) > 0 else print("PASS")
+
+    opponent_move = [Card.new("2s")]
+    my_card = [Card.new("2d")]
+    
+    print("\nJustin bot card: ", end=""); Card.print_pretty_cards(opponent_move + [Card.new("2h")])
+    print("Justin Action: ", end=""); Card.print_pretty_cards(opponent_move)
+    print("TL-AI bot cards: ", end=""); Card.print_pretty_cards(my_card)
+    tmp = bot_simulation.run_rule_based_bot(opponent_move, my_card)
+    print("TL-AI Action: ", end=""); Card.print_pretty_cards(tmp) if len(tmp) > 0 else print("PASS")
+
+    opponent_move = []
+    my_card = [Card.new('7c'), Card.new('7h'), Card.new('8s'), Card.new('8h'), Card.new('9d'),
+                    Card.new('9h'), Card.new('Qs'), Card.new('Qd'), Card.new('2s'), Card.new('2d')]
+    
+    print("\nJustin bot card: ", end=""); Card.print_pretty_cards(opponent_move + [Card.new('4c'), Card.new('4d'), Card.new('4h'), 
+                                                                                   Card.new('6d'), Card.new('6h'), 
+                                                                                  Card.new('Jc'), Card.new('Qh'), Card.new('Kd'), 
+                                                                                  Card.new('Kh'), Card.new('As'), Card.new('2h')])
+    print("Justin Action: ", end=""); Card.print_pretty_cards(opponent_move) if len(opponent_move) > 0 else print("PASS")
+    print("TL-AI bot cards: ", end=""); Card.print_pretty_cards(my_card)
+    tmp = bot_simulation.run_rule_based_bot(opponent_move, my_card)
+    print("TL-AI Action: ", end=""); Card.print_pretty_cards(tmp) if len(tmp) > 0 else print("PASS")
