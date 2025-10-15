@@ -62,7 +62,7 @@ class CustomDataGenerator(keras.utils.Sequence):
         return X, y
 
 
-src_data = r"data"
+src_data = r"F:\TLMN_4_players\medium\preprocess"
 batch_size = 256
 data_train_generator = CustomDataGenerator(
     src_data=src_data,
@@ -101,7 +101,7 @@ model.summary()
 
 model.compile(optimizer="adam", loss="mse", metrics=["mae"])
 model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
-    filepath=r"Bot_TLMN_solo_hard_level.keras",
+    filepath=r"F:\TLMN_4_players\medium\preprocess\tmp_1.keras",
     monitor='val_mae',
     mode='min',
     save_best_only=True,

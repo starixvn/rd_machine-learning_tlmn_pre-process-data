@@ -115,16 +115,11 @@ def generate_list_state_action_return_encode(folder_data_dir):
             assert len(state_info) > 1, f"len of Q_table is <= 1: {file_data_dir}"
             state_encoding = generate_state_encoding(state, initial_player_card)
 
-            state_len = len(state_encoding)
-            action_len = len(generate_action_encoding(-1))
-            state_action_array = np.empty(state_len + action_len, dtype=bool)
-            state_action_array[:state_len] = state_encoding
-
             for action, expected_return in state_info.items():
                 assert -100 <= expected_return <= 100
-                state_action_array[state_len:] = generate_action_encoding(action)
+                action_encoding = generate_action_encoding(action)
 
-                yield state_action_array, expected_return
+                yield np.concatenate((state_encoding, action_encoding)), expected_return
 
 def build_X_schema_columns(n_player):
     schema_columns = []
@@ -176,7 +171,7 @@ if __name__ == "__main__":
     n_process = psutil.cpu_count(logical=False) - 2
     task_queue = Queue()
 
-    all_data_src_dir = r"C:\Users\justin.pham\Downloads\test_tmp"
+    all_data_src_dir = r"F:\TLMN_4_players\medium"
     list_all_data_src_folder = glob(os.path.join(all_data_src_dir, '*'))
     print(f"list_all_data_src_folder: {list_all_data_src_folder}")
 
