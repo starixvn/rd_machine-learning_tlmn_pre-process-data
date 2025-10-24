@@ -80,6 +80,7 @@ def generate_action_encoding(action):
 
 def generate_state_encoding(state, initial_player_card):
     n_player = len(initial_player_card)
+    assert all(set(state[i]).issubset(set(initial_player_card[i])) for i in range(n_player))
     actions_card_player = [tuple(set(initial_player_card[i]) - set(state[i])) 
                             for i in range(n_player)]
     deck_remain = tuple(chain.from_iterable(state[1:n_player]))

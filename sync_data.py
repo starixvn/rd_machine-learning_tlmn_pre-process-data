@@ -5,23 +5,15 @@ from tqdm import tqdm
 import shutil
 
 def copy_data(src_data, des_dir):
-    for entry in os.scandir(src_data):
-        assert entry.is_dir(follow_symlinks=False)
-        print(entry.name)
-        des_entry = os.path.join(des_dir, entry.name)
-        os.makedirs(des_entry, exist_ok=True)
-        for sub_entry in os.scandir(entry.path):
-            assert sub_entry.is_file()
-            des_sub_entry = os.path.join(des_entry, sub_entry.name)
-            if not os.path.exists(des_sub_entry):
-                shutil.copy(sub_entry.path, des_sub_entry)
+    command = fr"robocopy {src_data} {des_dir} /E /XC /MT:8 /R:3 /W:5 /Z /NFL"
+    os.system(command)
+    print(f"SUCCESSFULLY COPY folder {src_data} to {des_dir}")
 
 def check_data(src_data, des_dir):
     print(f"Checking the data {src_data} ........ ")
     for entry in tqdm(os.scandir(src_data)):
         assert entry.is_dir(follow_symlinks=False)
         des_entry = os.path.join(des_dir, entry.name)
-        os.makedirs(des_entry, exist_ok=True)
         for sub_entry in os.scandir(entry.path):
             assert sub_entry.is_file()
             des_sub_entry = os.path.join(des_entry, sub_entry.name)
@@ -34,16 +26,16 @@ def check_data(src_data, des_dir):
 
 start_time = time.time()
 
-# copy_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_2_players_hard_level\data_hard_13_11")
-# copy_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_2_players_hard_level\data_hard_10_8")
-# copy_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_2_players_hard_level\data_hard_7_5")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_4_players\medium\data_medium_13_11_add")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_4_players\medium\data_medium_10_8_add")
+# copy_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_4_players\medium\data_medium_7_5_add")
 # copy_data(r"\\10.18.200.241\public\aibot\data_full_4_3", r"F:\TLMN_2_players_hard_level\data_hard_4_3")
 # copy_data(r"\\10.18.200.241\public\aibot\data_full_2_1", r"F:\TLMN_2_players_hard_level\data_hard_2_1")
 
-# check_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_2_players_hard_level\data_hard_13_11")
-# check_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_2_players_hard_level\data_hard_10_8")
-# check_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_2_players_hard_level\data_hard_7_5")
-check_data(r"\\10.18.200.241\public\aibot\data_full_4_3", r"F:\TLMN_2_players_hard_level\data_hard_4_3")
-check_data(r"\\10.18.200.241\public\aibot\data_full_2_1", r"F:\TLMN_2_players_hard_level\data_hard_2_1")
+check_data(r"\\10.18.200.241\public\aibot\data_full_13_11", r"F:\TLMN_4_players\medium\data_medium_13_11")
+check_data(r"\\10.18.200.241\public\aibot\data_full_10_8", r"F:\TLMN_4_players\medium\data_medium_10_8")
+check_data(r"\\10.18.200.241\public\aibot\data_full_7_5", r"F:\TLMN_4_players\medium\data_medium_7_5")
+# check_data(r"\\10.18.200.241\public\aibot\data_full_4_3", r"F:\TLMN_2_players_hard_level\data_hard_4_3")
+# check_data(r"\\10.18.200.241\public\aibot\data_full_2_1", r"F:\TLMN_2_players_hard_level\data_hard_2_1")
 
 print(f"Time taken: {time.time() - start_time:.2f} seconds")
